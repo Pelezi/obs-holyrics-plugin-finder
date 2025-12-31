@@ -12,7 +12,7 @@ The plugin template is meant to be used as a starting point for OBS Studio plugi
 
 | Platform  | Tool   |
 |-----------|--------|
-| Windows   | Visual Studio 17 2022 |
+| Windows   | Visual Studio 17 2022 / Visual Studio 18 2026 |
 | macOS     | XCode 16.0 |
 | Windows, macOS  | CMake 3.30.5 |
 | Ubuntu 24.04 | CMake 3.28.3 |
@@ -23,6 +23,24 @@ The plugin template is meant to be used as a starting point for OBS Studio plugi
 ## Quick Start
 
 An absolute bare-bones [Quick Start Guide](https://github.com/obsproject/obs-plugintemplate/wiki/Quick-Start-Guide) is available in the wiki.
+
+### Windows Build Quick Start
+
+**IMPORTANT:** For Windows x64 builds using the Ninja generator, you have two options:
+
+#### Option 1: Use the provided batch file (Recommended for beginners)
+1. Double-click `configure-x64.bat` in the project root
+2. Once configuration completes, build with: `cmake --build build_x64_ninja --config RelWithDebInfo`
+
+#### Option 2: Manual configuration from x64 Native Tools Command Prompt
+1. Open **"x64 Native Tools Command Prompt for VS"** from the Start Menu
+2. Navigate to your plugin directory: `cd C:\path\to\your\plugin`
+3. Run: `cmake --preset windows-x64`
+4. Build: `cmake --build --preset windows-x64`
+
+**Note:** If you get architecture detection errors, make sure you're using the **x64** Native Tools Command Prompt, not the x86 version or a regular command prompt.
+
+Alternatively, if you prefer using Visual Studio IDE directly without command prompts, you can open the folder in Visual Studio and use the CMake integration.
 
 ## Documentation
 

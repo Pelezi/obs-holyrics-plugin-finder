@@ -6,6 +6,46 @@ include(compiler_common)
 
 set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT ProgramDatabase)
 
+# Set MSVC runtime library policy
+if(POLICY CMP0091)
+  cmake_policy(SET CMP0091 NEW)
+endif()
+
+# Set default runtime library to dynamic
+if(NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+endif()
+
+# Set Windows SDK version for non-Visual Studio generators
+if(NOT CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION)
+  if(CMAKE_SYSTEM_VERSION)
+    set(CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION ${CMAKE_SYSTEM_VERSION})
+  endif()
+  
+  # For non-Visual Studio generators, try to detect the Windows SDK version
+  if(NOT CMAKE_GENERATOR MATCHES "Visual Studio")
+    # Try to find WindowsSDKs directory
+    file(GLOB _sdk_dirs 
+      "C:/Program Files (x86)/Windows Kits/10/Include/10.0.*"
+      "C:/Program Files/Windows Kits/10/Include/10.0.*"
+    )
+    
+    if(_sdk_dirs)
+      # Sort to get the latest version
+      list(SORT _sdk_dirs COMPARE NATURAL ORDER DESCENDING)
+      list(GET _sdk_dirs 0 _latest_sdk)
+      
+      # Extract version number from path
+      string(REGEX MATCH "10\\.0\\.[0-9.]+" _sdk_version "${_latest_sdk}")
+      
+      if(_sdk_version)
+        set(CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION ${_sdk_version})
+        message(STATUS "Detected Windows SDK version: ${_sdk_version}")
+      endif()
+    endif()
+  endif()
+endif()
+
 message(DEBUG "Current Windows API version: ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}")
 if(CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION_MAXIMUM)
   message(DEBUG "Maximum Windows API version: ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION_MAXIMUM}")
@@ -38,15 +78,8 @@ add_compile_options(
   $<$<NOT:$<CONFIG:Debug>>:/Gy>
   $<$<NOT:$<CONFIG:Debug>>:/GL>
   $<$<NOT:$<CONFIG:Debug>>:/Oi>
-)
-
-add_compile_definitions(
-  UNICODE
-  _UNICODE
-  _CRT_SECURE_NO_WARNINGS
-  _CRT_NONSTDC_NO_WARNINGS
-  $<$<CONFIG:DEBUG>:DEBUG>
-  $<$<CONFIG:DEBUG>:_DEBUG>
+  $<$<CONFIG:Debug>:/MDd>
+  $<$<NOT:$<CONFIG:Debug>>:/MD>
 )
 
 add_link_options(
