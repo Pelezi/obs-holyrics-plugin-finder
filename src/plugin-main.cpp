@@ -19,6 +19,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <plugin-support.h>
+#include <QCoreApplication>
 #include "holyrics-finder.h"
 #include "holyrics-dialog.h"
 
@@ -71,11 +72,14 @@ void obs_module_unload(void)
 	obs_log(LOG_INFO, "plugin unloaded");
 
 	if (g_dialog) {
+		g_dialog->close();
 		delete g_dialog;
 		g_dialog = nullptr;
 	}
 
 	if (g_finder) {
+		// Ensure all pending network operations are finished before deletion
+		QCoreApplication::processEvents();
 		delete g_finder;
 		g_finder = nullptr;
 	}

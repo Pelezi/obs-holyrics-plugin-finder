@@ -29,7 +29,17 @@ HolyricsFinder::HolyricsFinder(QObject *parent)
 
 HolyricsFinder::~HolyricsFinder()
 {
-	delete m_settings;
+	// Abort all pending network requests before destruction
+	if (m_networkManager) {
+		disconnect(m_networkManager, nullptr, this, nullptr);
+		m_networkManager->deleteLater();
+		m_networkManager = nullptr;
+	}
+	
+	if (m_settings) {
+		delete m_settings;
+		m_settings = nullptr;
+	}
 }
 
 QList<HolyricsFinder::HolyricsSource> HolyricsFinder::getSourceDefinitions()
