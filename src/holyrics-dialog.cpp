@@ -13,19 +13,20 @@ the Free Software Foundation; either version 2 of the License, or
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
-#include <QRegularExpressionValidator>
-#include <QRegularExpression>
+#include <QIntValidator>
+#include <QNetworkInterface>
+#include <QHostAddress>
 
 HolyricsDialog::HolyricsDialog(QWidget *parent, HolyricsFinder *finder)
 	: QDialog(parent),
 	  m_finder(finder)
 {
 	setWindowTitle("Holyrics Finder");
-	setMinimumWidth(500);
+	setMinimumWidth(550);
 	setMinimumHeight(400);
 
 	setupUI();
-	loadIpHistory();
+	detectLocalIP();
 
 	connect(m_finder, &HolyricsFinder::connectionSuccess, this,
 		&HolyricsDialog::onConnectionSuccess);
@@ -49,19 +50,56 @@ void HolyricsDialog::setupUI()
 	QLabel *ipLabel = new QLabel("Holyrics IP Address:", this);
 	connectionLayout->addWidget(ipLabel);
 
-	m_ipCombo = new QComboBox(this);
-	m_ipCombo->setEditable(true);
-	m_ipCombo->setInsertPolicy(QComboBox::NoInsert);
-	m_ipCombo->lineEdit()->setPlaceholderText("192.168.0.124");
+	QHBoxLayout *ipLayout = new QHBoxLayout();
 	
-	QRegularExpression ipRegex(
-		"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}"
-		"(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$");
-	QRegularExpressionValidator *ipValidator =
-		new QRegularExpressionValidator(ipRegex, this);
-	m_ipCombo->lineEdit()->setValidator(ipValidator);
+	m_octet1 = new QSpinBox(this);
+	m_octet1->setRange(0, 255);
+	m_octet1->setButtonSymbols(QAbstractSpinBox::NoButtons);
+	m_octet1->setAlignment(Qt::AlignCenter);
+	m_octet1->setMaximumWidth(60);
+	ipLayout->addWidget(m_octet1);
 
-	connectionLayout->addWidget(m_ipCombo);
+	ipLayout->addWidget(new QLabel(".", this));
+
+	m_octet2 = new QSpinBox(this);
+	m_octet2->setRange(0, 255);
+	m_octet2->setButtonSymbols(QAbstractSpinBox::NoButtons);
+	m_octet2->setAlignment(Qt::AlignCenter);
+	m_octet2->setMaximumWidth(60);
+	ipLayout->addWidget(m_octet2);
+
+	ipLayout->addWidget(new QLabel(".", this));
+
+	m_octet3 = new QSpinBox(this);
+	m_octet3->setRange(0, 255);
+	m_octet3->setButtonSymbols(QAbstractSpinBox::NoButtons);
+	m_octet3->setAlignment(Qt::AlignCenter);
+	m_octet3->setMaximumWidth(60);
+	ipLayout->addWidget(m_octet3);
+
+	ipLayout->addWidget(new QLabel(".", this));
+
+	m_octet4 = new QSpinBox(this);
+	m_octet4->setRange(0, 255);
+	m_octet4->setButtonSymbols(QAbstractSpinBox::NoButtons);
+	m_octet4->setAlignment(Qt::AlignCenter);
+	m_octet4->setMaximumWidth(60);
+	ipLayout->addWidget(m_octet4);
+
+	ipLayout->addSpacing(20);
+	ipLayout->addWidget(new QLabel("Port:", this));
+
+	m_portInput = new QSpinBox(this);
+	m_portInput->setRange(1, 65535);
+	m_portInput->setValue(7575);
+	m_portInput->setButtonSymbols(QAbstractSpinBox::NoButtons);
+	m_portInput->setAlignment(Qt::AlignCenter);
+	m_portInput->setMaximumWidth(80);
+	ipLayout->addWidget(m_portInput);
+
+	ipLayout->addStretch();
+
+	connectionLayout->addLayout(ipLayout);
 
 	QHBoxLayout *buttonLayout = new QHBoxLayout();
 	
@@ -117,35 +155,74 @@ void HolyricsDialog::setupUI()
 	mainLayout->addLayout(closeLayout);
 }
 
-void HolyricsDialog::loadIpHistory()
+void HolyricsDialog::detectLocalIP()
 {
-	QStringList history = m_finder->getIpHistory();
-	m_ipCombo->clear();
-	m_ipCombo->addItems(history);
+	QList<QHostAddress> addresses = QNetworkInterface::allAddresses();
+	
+	for (const QHostAddress &address : addresses) {
+		if (address.protocol() == QAbstractSocket::IPv4Protocol && 
+		    !address.isLoopback()) {
+			QString ipStr = address.toString();
+			QStringList parts = ipStr.split('.');
+			
+			if (parts.size() == 4) {
+				m_octet1->setValue(parts[0].toInt());
+				m_octet2->setValue(parts[1].toInt());
+				m_octet3->setValue(parts[2].toInt());
+				m_octet4->setValue(parts[3].toInt());
+				return;
+			}
+		}
+	}
+	
+	m_octet1->setValue(192);
+	m_octet2->setValue(168);
+	m_octet3->setValue(0);
+	m_octet4->setValue(1);
+}
+
+QString HolyricsDialog::getIpFromInputs() const
+{
+	return QString("%1.%2.%3.%4")
+		.arg(m_octet1->value())
+		.arg(m_octet2->value())
+		.arg(m_octet3->value())
+		.arg(m_octet4->value());
+}
+
+int HolyricsDialog::getPortFromInput() const
+{
+	return m_portInput->value();
+}
+
+void HolyricsDialog::setIpToInputs(const QString &ip)
+{
+	QStringList parts = ip.split('.');
+	if (parts.size() == 4) {
+		m_octet1->setValue(parts[0].toInt());
+		m_octet2->setValue(parts[1].toInt());
+		m_octet3->setValue(parts[2].toInt());
+		m_octet4->setValue(parts[3].toInt());
+	}
 }
 
 void HolyricsDialog::onTestConnection()
 {
-	QString ip = m_ipCombo->currentText().trimmed();
-	if (ip.isEmpty()) {
-		updateStatus("Please enter an IP address", true);
-		return;
-	}
+	QString ip = getIpFromInputs();
+	int port = getPortFromInput();
 
-	updateStatus("Testing connection to " + ip + "...");
+	updateStatus(QString("Testing connection to %1:%2...").arg(ip).arg(port));
 	m_testButton->setEnabled(false);
 	m_scanButton->setEnabled(false);
 	m_createButton->setEnabled(false);
 
-	m_finder->testConnection(ip);
+	m_finder->testConnection(ip, port);
 }
 
 void HolyricsDialog::onScanNetwork()
 {
-	QString ip = m_ipCombo->currentText().trimmed();
-	if (ip.isEmpty()) {
-		ip = "192.168.0.1";
-	}
+	QString ip = getIpFromInputs();
+	int port = getPortFromInput();
 
 	updateStatus("Scanning network for Holyrics instances...");
 	m_progressBar->setVisible(true);
@@ -154,20 +231,16 @@ void HolyricsDialog::onScanNetwork()
 	m_scanButton->setEnabled(false);
 	m_createButton->setEnabled(false);
 
-	m_finder->scanNetwork(ip);
+	m_finder->scanNetwork(ip, port);
 }
 
 void HolyricsDialog::onCreateSources()
 {
-	QString ip = m_ipCombo->currentText().trimmed();
-	if (ip.isEmpty()) {
-		updateStatus("Please enter an IP address", true);
-		return;
-	}
+	QString ip = getIpFromInputs();
+	int port = getPortFromInput();
 
-	m_finder->createHolyricsSources(ip);
-	updateStatus("Sources created successfully for " + ip);
-	loadIpHistory();
+	m_finder->createHolyricsSources(ip, port);
+	updateStatus(QString("Sources created successfully for %1:%2").arg(ip).arg(port));
 }
 
 void HolyricsDialog::onConnectionSuccess(const QString &ip)
@@ -178,11 +251,7 @@ void HolyricsDialog::onConnectionSuccess(const QString &ip)
 
 	updateStatus("? Connection successful to " + ip);
 	
-	m_ipCombo->setCurrentText(ip);
-	
-	if (m_ipCombo->findText(ip) == -1) {
-		m_ipCombo->insertItem(0, ip);
-	}
+	setIpToInputs(ip);
 }
 
 void HolyricsDialog::onConnectionFailed(const QString &ip)

@@ -31,9 +31,9 @@ public:
 
 	QStringList getIpHistory() const;
 	void addIpToHistory(const QString &ip);
-	void scanNetwork(const QString &baseIp);
-	void testConnection(const QString &ip);
-	void createHolyricsSources(const QString &ip);
+	void scanNetwork(const QString &baseIp, int port);
+	void testConnection(const QString &ip, int port);
+	void createHolyricsSources(const QString &ip, int port);
 
 	static QList<HolyricsSource> getSourceDefinitions();
 
@@ -51,6 +51,7 @@ private:
 	QSettings *m_settings;
 	int m_scanningCount;
 	int m_scanningTotal;
+	int m_currentPort;
 
 	void createBrowserSource(const QString &name, const QString &url);
 	bool isHolyricsResponse(const QString &response);

@@ -12,7 +12,7 @@ the Free Software Foundation; either version 2 of the License, or
 
 #include <QDialog>
 #include <QLineEdit>
-#include <QComboBox>
+#include <QSpinBox>
 #include <QPushButton>
 #include <QLabel>
 #include <QProgressBar>
@@ -39,7 +39,11 @@ private slots:
 private:
 	HolyricsFinder *m_finder;
 
-	QComboBox *m_ipCombo;
+	QSpinBox *m_octet1;
+	QSpinBox *m_octet2;
+	QSpinBox *m_octet3;
+	QSpinBox *m_octet4;
+	QSpinBox *m_portInput;
 	QPushButton *m_testButton;
 	QPushButton *m_scanButton;
 	QPushButton *m_createButton;
@@ -48,6 +52,9 @@ private:
 	QListWidget *m_sourcesList;
 
 	void setupUI();
-	void loadIpHistory();
+	void detectLocalIP();
+	QString getIpFromInputs() const;
+	int getPortFromInput() const;
+	void setIpToInputs(const QString &ip);
 	void updateStatus(const QString &message, bool isError = false);
 };

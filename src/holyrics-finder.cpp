@@ -20,7 +20,8 @@ HolyricsFinder::HolyricsFinder(QObject *parent)
 	  m_networkManager(new QNetworkAccessManager(this)),
 	  m_settings(new QSettings("OBS", "HolyricsFinder")),
 	  m_scanningCount(0),
-	  m_scanningTotal(0)
+	  m_scanningTotal(0),
+	  m_currentPort(7575)
 {
 	connect(m_networkManager, &QNetworkAccessManager::finished, this,
 		&HolyricsFinder::onNetworkReply);
@@ -61,7 +62,7 @@ void HolyricsFinder::addIpToHistory(const QString &ip)
 	m_settings->sync();
 }
 
-void HolyricsFinder::scanNetwork(const QString &baseIp)
+void HolyricsFinder::scanNetwork(const QString &baseIp, int port)
 {
 	QStringList parts = baseIp.split('.');
 	if (parts.size() != 4) {
@@ -72,18 +73,19 @@ void HolyricsFinder::scanNetwork(const QString &baseIp)
 
 	m_scanningCount = 0;
 	m_scanningTotal = 254;
+	m_currentPort = port;
 
 	QString base = QString("%1.%2.%3.").arg(parts[0], parts[1], parts[2]);
 
 	for (int i = 1; i <= 254; ++i) {
 		QString ip = base + QString::number(i);
-		testConnection(ip);
+		testConnection(ip, port);
 	}
 }
 
-void HolyricsFinder::testConnection(const QString &ip)
+void HolyricsFinder::testConnection(const QString &ip, int port)
 {
-	QUrl qurl(QString("http://%1:7575/").arg(ip));
+	QUrl qurl(QString("http://%1:%2/").arg(ip).arg(port));
 	QNetworkRequest request;
 	request.setUrl(qurl);
 	request.setAttribute(QNetworkRequest::Attribute::User, QVariant(ip));
@@ -129,18 +131,18 @@ bool HolyricsFinder::isHolyricsResponse(const QString &response)
 	       response.contains("stage-view", Qt::CaseInsensitive);
 }
 
-void HolyricsFinder::createHolyricsSources(const QString &ip)
+void HolyricsFinder::createHolyricsSources(const QString &ip, int port)
 {
 	addIpToHistory(ip);
 
 	auto sources = getSourceDefinitions();
 	for (const auto &source : sources) {
-		QString url = QString("http://%1:7575%2").arg(ip, source.urlPath);
+		QString url = QString("http://%1:%2%3").arg(ip).arg(port).arg(source.urlPath);
 		createBrowserSource(source.name, url);
 	}
 
-	obs_log(LOG_INFO, "Created %d Holyrics sources for IP: %s",
-		sources.size(), ip.toUtf8().constData());
+	obs_log(LOG_INFO, "Created %d Holyrics sources for IP: %s:%d",
+		sources.size(), ip.toUtf8().constData(), port);
 }
 
 void HolyricsFinder::createBrowserSource(const QString &name, const QString &url)
