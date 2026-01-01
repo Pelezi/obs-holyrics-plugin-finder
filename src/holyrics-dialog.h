@@ -30,11 +30,12 @@ public:
 private slots:
 	void onTestConnection();
 	void onScanNetwork();
-	void onCreateSources();
+	void onUpdateSources();
 	void onConnectionSuccess(const QString &ip);
 	void onConnectionFailed(const QString &ip);
 	void onScanProgress(int current, int total);
 	void onScanComplete();
+	void refreshSourcesList();
 
 private:
 	HolyricsFinder *m_finder;
@@ -46,7 +47,8 @@ private:
 	QSpinBox *m_portInput;
 	QPushButton *m_testButton;
 	QPushButton *m_scanButton;
-	QPushButton *m_createButton;
+	QPushButton *m_updateButton;
+	QPushButton *m_copyIpButton;
 	QLabel *m_statusLabel;
 	QProgressBar *m_progressBar;
 	QListWidget *m_sourcesList;

@@ -1,77 +1,157 @@
-# OBS Plugin Template
+﻿# OBS Holyrics Finder Plugin
 
-## Introduction
+**Find and connect to Holyrics instances on your network directly from OBS Studio!**
 
-The plugin template is meant to be used as a starting point for OBS Studio plugin development. It includes:
+[![GitHub release](https://img.shields.io/github/v/release/Pelezi/obs-holyrics-plugin-finder)](https://github.com/Pelezi/obs-holyrics-plugin-finder/releases)
+[![License](https://img.shields.io/github/license/Pelezi/obs-holyrics-plugin-finder)](LICENSE)
 
-* Boilerplate plugin source code
-* A CMake project file
-* GitHub Actions workflows and repository actions
+> 🇧🇷 [Leia em Português](README.pt-BR.md)
 
-## Supported Build Environments
+This OBS Studio plugin helps you quickly find and configure browser sources pointing to [Holyrics](https://holyrics.com.br/) stage view instances on your local network.
 
-| Platform  | Tool   |
-|-----------|--------|
-| Windows   | Visual Studio 17 2022 / Visual Studio 18 2026 |
-| macOS     | XCode 16.0 |
-| Windows, macOS  | CMake 3.30.5 |
-| Ubuntu 24.04 | CMake 3.28.3 |
-| Ubuntu 24.04 | `ninja-build` |
-| Ubuntu 24.04 | `pkg-config`
-| Ubuntu 24.04 | `build-essential` |
+##  Features
 
-## Quick Start
+-  **Network Scanner**: Automatically scan your network to find Holyrics instances
+-  **Quick Test**: Test connection to a specific IP address
+-  **Smart History**: Remembers successful connections and tests them first
+-  **Bulk Update**: Update multiple browser sources with one click
+-  **Multi-language**: Supports English and Portuguese (Brazil)
+-  **Copy IP:Port**: Easy clipboard copy functionality
+-  **Smart Selection**: Auto-selects only sources that need updating
 
-An absolute bare-bones [Quick Start Guide](https://github.com/obsproject/obs-plugintemplate/wiki/Quick-Start-Guide) is available in the wiki.
+##  Installation
 
-### Windows Build Quick Start
+### Requirements
 
-**IMPORTANT:** For Windows x64 builds using the Ninja generator, you have two options:
+- **OBS Studio** 28.0 or later
+- **Windows** 10/11 (64-bit)
+- **Holyrics** running on your network
 
-#### Option 1: Use the provided batch file (Recommended for beginners)
-1. Double-click `configure-x64.bat` in the project root
-2. Once configuration completes, build with: `cmake --build build_x64_ninja --config RelWithDebInfo`
+### Steps
 
-#### Option 2: Manual configuration from x64 Native Tools Command Prompt
-1. Open **"x64 Native Tools Command Prompt for VS"** from the Start Menu
-2. Navigate to your plugin directory: `cd C:\path\to\your\plugin`
-3. Run: `cmake --preset windows-x64`
-4. Build: `cmake --build --preset windows-x64`
+1. Download the latest release ZIP from [Releases](https://github.com/Pelezi/obs-holyrics-plugin-finder/releases)
+2. Extract the ZIP file
+3. Copy the `obs-plugins` folder to your OBS installation directory
+   - Default: `C:\Program Files\obs-studio\`
+4. Restart OBS Studio
+5. Find the plugin in **Tools** > **Holyrics Finder** (or "Localizador Holyrics" in Portuguese)
 
-**Note:** If you get architecture detection errors, make sure you're using the **x64** Native Tools Command Prompt, not the x86 version or a regular command prompt.
+##  Usage
 
-Alternatively, if you prefer using Visual Studio IDE directly without command prompts, you can open the folder in Visual Studio and use the CMake integration.
+### Finding Holyrics on Your Network
 
-## Documentation
+1. Open OBS Studio
+2. Go to **Tools** > **Holyrics Finder**
+3. Choose one of these options:
+   - **Test Connection**: If you know the IP address
+   - **Scan Network**: To automatically find Holyrics
 
-All documentation can be found in the [Plugin Template Wiki](https://github.com/obsproject/obs-plugintemplate/wiki).
+### Updating Browser Sources
 
-Suggested reading to get up and running:
+1. After a successful connection, sources are automatically listed
+2. Sources that need updating are automatically selected
+3. Sources already pointing to the correct IP:Port are unchecked
+4. Click **Update Selected Sources** to apply changes
 
-* [Getting started](https://github.com/obsproject/obs-plugintemplate/wiki/Getting-Started)
-* [Build system requirements](https://github.com/obsproject/obs-plugintemplate/wiki/Build-System-Requirements)
-* [Build system options](https://github.com/obsproject/obs-plugintemplate/wiki/CMake-Build-System-Options)
+### Tips
 
-## GitHub Actions & CI
+-  The plugin remembers successful connections
+-  On next scan, it tests previous IPs first (faster!)
+-  If you change networks, it automatically adapts
+-  Use "Copy IP:Port" to quickly share connection details
 
-Default GitHub Actions workflows are available for the following repository actions:
+##  Supported Languages
 
-* `push`: Run for commits or tags pushed to `master` or `main` branches.
-* `pr-pull`: Run when a Pull Request has been pushed or synchronized.
-* `dispatch`: Run when triggered by the workflow dispatch in GitHub's user interface.
-* `build-project`: Builds the actual project and is triggered by other workflows.
-* `check-format`: Checks CMake and plugin source code formatting and is triggered by other workflows.
+The plugin automatically matches OBS's language setting:
 
-The workflows make use of GitHub repository actions (contained in `.github/actions`) and build scripts (contained in `.github/scripts`) which are not needed for local development, but might need to be adjusted if additional/different steps are required to build the plugin.
+-  **English**
+-  **Português (Brasil)**
 
-### Retrieving build artifacts
+To change language:
+1. Go to OBS **Settings** > **General** > **Language**
+2. Restart OBS
 
-Successful builds on GitHub Actions will produce build artifacts that can be downloaded for testing. These artifacts are commonly simple archives and will not contain package installers or installation programs.
+##  Building from Source
 
-### Building a Release
+### Prerequisites
 
-To create a release, an appropriately named tag needs to be pushed to the `main`/`master` branch using semantic versioning (e.g., `12.3.4`, `23.4.5-beta2`). A draft release will be created on the associated repository with generated installer packages or installation programs attached as release artifacts.
+- CMake 3.16 or later
+- Visual Studio 2026 with C++ tools
+- Qt 6
+- OBS Studio 32.x build dependencies
 
-## Signing and Notarizing on macOS
+### Build Steps
 
-Basic concepts of codesigning and notarization on macOS are explained in the correspodning [Wiki article](https://github.com/obsproject/obs-plugintemplate/wiki/Codesigning-On-macOS) which has a specific section for the [GitHub Actions setup](https://github.com/obsproject/obs-plugintemplate/wiki/Codesigning-On-macOS#setting-up-code-signing-for-github-actions).
+```powershell
+# Clone the repository
+git clone https://github.com/Pelezi/obs-holyrics-plugin-finder.git
+cd obs-holyrics-plugin-finder
+
+# Configure
+cmake --preset windows-x64
+
+# Build Release
+cmake --build build_x64_ninja --config Release
+
+# Or use the deployment script for local testing
+.\build-and-deploy.ps1
+```
+
+### Creating a Release Package
+
+```powershell
+.\build-release.ps1 -Version "1.0.0"
+```
+
+This creates a ready-to-distribute ZIP file in the `release` folder.
+
+##  How It Works
+
+1. **Network Scanning**: Tests connections to all IPs in your subnet (XXX.XXX.XXX.1-254)
+2. **Smart Detection**: Identifies Holyrics by checking HTTP responses
+3. **History Priority**: Tests previously successful IPs first
+4. **Auto-Update**: Only selects sources that point to different IPs
+
+##  Troubleshooting
+
+### Plugin doesn't appear in Tools menu
+
+- Verify you copied files to the correct OBS directory
+- Check OBS version (must be 32.0+)
+- Look at OBS logs: **Help** > **Log Files** > **View Current Log**
+
+### Can't find Holyrics instance
+
+- Ensure Holyrics is running and accessible on your network
+- Check firewall settings
+- Try testing with the specific IP address instead of scanning
+- Default Holyrics port is 80
+
+### Sources not updating
+
+- Make sure sources are browser sources with IP:Port URLs
+- Check if sources are in the current scene collection
+- Try clicking "Refresh List"
+
+##  Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+##  License
+
+This project is licensed under the GNU General Public License v2.0 - see the [LICENSE](LICENSE) file for details.
+
+##  Acknowledgments
+
+- [OBS Studio](https://obsproject.com/) - Amazing streaming software
+- [Holyrics](https://holyrics.com.br/) - Church presentation software
+- All contributors and users of this plugin
+
+##  Support
+
+-  **Bug Reports**: [GitHub Issues](https://github.com/Pelezi/obs-holyrics-plugin-finder/issues)
+-  **Feature Requests**: [GitHub Issues](https://github.com/Pelezi/obs-holyrics-plugin-finder/issues)
+
+---
+
+**Made with ❤️ for the worship tech community**

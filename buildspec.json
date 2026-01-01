@@ -36,7 +36,7 @@
             "bundleId": "com.pelezi.holyrics-finder-for-obs"
         }
     },
-    "name": "obs-holyrics-finder",
+    "name": "holyrics-finder-obs",
     "displayName": "Holyrics Finder",
     "version": "1.0.0",
     "author": "Your Name Here",

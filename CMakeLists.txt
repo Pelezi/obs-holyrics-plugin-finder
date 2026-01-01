@@ -22,7 +22,7 @@ if(ENABLE_FRONTEND_API)
 endif()
 
 if(ENABLE_QT)
-  find_package(Qt6 COMPONENTS Widgets Core Network)
+  find_package(Qt6 COMPONENTS Widgets Core Network REQUIRED)
   target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Qt6::Core Qt6::Widgets Qt6::Network)
   target_compile_options(
     ${CMAKE_PROJECT_NAME}
@@ -41,6 +41,8 @@ target_sources(
           src/holyrics-finder.h
           src/holyrics-dialog.cpp
           src/holyrics-dialog.h
+          src/translations.cpp
+          src/translations.h
 )
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})

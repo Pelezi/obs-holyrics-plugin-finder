@@ -20,8 +20,10 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <obs-frontend-api.h>
 #include <plugin-support.h>
 #include <QCoreApplication>
+#include <QLocale>
 #include "holyrics-finder.h"
 #include "holyrics-dialog.h"
+#include "translations.h"
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
@@ -38,7 +40,7 @@ const char *obs_module_description(void)
 
 const char *obs_module_author(void)
 {
-	return "Your Name Here";
+	return "Pelezi";
 }
 
 HolyricsFinder *g_finder = nullptr;
@@ -53,12 +55,23 @@ bool obs_module_load(void)
 	obs_frontend_add_event_callback(
 		[](enum obs_frontend_event event, void *) {
 			if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
+				// Detect OBS language
+				QString obsLang = QLocale().name();
+				if (obsLang.startsWith("pt")) {
+					Translations::setLanguage("pt-BR");
+				} else {
+					Translations::setLanguage("en");
+				}
+
 				g_dialog = new HolyricsDialog(
 					(QWidget *)obs_frontend_get_main_window(),
 					g_finder);
 
+				// Get translated menu name
+				QString menuName = Translations::get("menu.name");
+				
 				obs_frontend_add_tools_menu_item(
-					"Holyrics Finder",
+					menuName.toUtf8().constData(),
 					[](void *) { g_dialog->show(); }, nullptr);
 			}
 		},
@@ -69,18 +82,24 @@ bool obs_module_load(void)
 
 void obs_module_unload(void)
 {
-	obs_log(LOG_INFO, "plugin unloaded");
+	obs_log(LOG_INFO, "[obs-holyrics-finder] plugin unloading...");
 
+	// Set shutdown flag first
+	if (g_finder) {
+		g_finder->prepareForShutdown();
+	}
+
+	// Don't delete dialog - Qt is shutting down and any Qt calls can crash
+	// Just set to nullptr and let the OS clean up the memory
 	if (g_dialog) {
-		g_dialog->close();
-		delete g_dialog;
 		g_dialog = nullptr;
 	}
 
+	// Don't delete finder - it has Qt objects (QNetworkAccessManager, QSettings)
+	// Just set to nullptr and let the OS clean up the memory
 	if (g_finder) {
-		// Ensure all pending network operations are finished before deletion
-		QCoreApplication::processEvents();
-		delete g_finder;
 		g_finder = nullptr;
 	}
+
+	obs_log(LOG_INFO, "[obs-holyrics-finder] plugin unloaded");
 }

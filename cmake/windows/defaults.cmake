@@ -47,6 +47,28 @@ if(NOT TARGET OBS::libobs)
       list(GET _obs_source_dirs 0 _obs_source_dir)
       set(obs_INCLUDE_DIR "${_obs_source_dir}/libobs")
       
+      # Generate obsconfig.h if it doesn't exist
+      set(_obsconfig_h "${_obs_source_dir}/libobs/obsconfig.h")
+      if(NOT EXISTS "${_obsconfig_h}")
+        set(_obsconfig_h_in "${_obs_source_dir}/libobs/obsconfig.h.in")
+        if(EXISTS "${_obsconfig_h_in}")
+          message(STATUS "Generating obsconfig.h from template...")
+          
+          # Set default values for OBS configuration
+          set(OBS_DATA_PATH "")
+          set(OBS_PLUGIN_PATH "")
+          set(OBS_PLUGIN_DESTINATION "")
+          set(OBS_RELEASE_CANDIDATE 0)
+          set(OBS_BETA 0)
+          
+          # Configure the file
+          configure_file("${_obsconfig_h_in}" "${_obsconfig_h}" @ONLY)
+          message(STATUS "Generated obsconfig.h at: ${_obsconfig_h}")
+        else()
+          message(WARNING "obsconfig.h.in not found at: ${_obsconfig_h_in}")
+        endif()
+      endif()
+      
       # Set bin directory based on architecture
       if(_arch STREQUAL "x64")
         set(_obs_bin_dir "${_obs_install_dir}/bin/64bit")

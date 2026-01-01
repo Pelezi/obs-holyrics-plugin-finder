@@ -12,8 +12,16 @@ the Free Software Foundation; either version 2 of the License, or
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <plugin-support.h>
+#include <obs-data.h>
 #include <QUrl>
 #include <QNetworkRequest>
+#include <QMainWindow>
+#include <QDockWidget>
+#include <QMetaProperty>
+#include <QMessageBox>
+#include <QRegularExpression>
+#include <QUuid>
+#include <QSet>
 
 HolyricsFinder::HolyricsFinder(QObject *parent)
 	: QObject(parent),
@@ -21,25 +29,28 @@ HolyricsFinder::HolyricsFinder(QObject *parent)
 	  m_settings(new QSettings("OBS", "HolyricsFinder")),
 	  m_scanningCount(0),
 	  m_scanningTotal(0),
-	  m_currentPort(7575)
+	  m_currentPort(80),
+	  m_isShuttingDown(false),
+	  m_scanFoundConnection(false)
 {
 	connect(m_networkManager, &QNetworkAccessManager::finished, this,
 		&HolyricsFinder::onNetworkReply);
+	
+	logConnectionHistory();
 }
 
 HolyricsFinder::~HolyricsFinder()
 {
-	// Abort all pending network requests before destruction
-	if (m_networkManager) {
-		disconnect(m_networkManager, nullptr, this, nullptr);
-		m_networkManager->deleteLater();
-		m_networkManager = nullptr;
-	}
+	obs_log(LOG_INFO, "[HolyricsFinder] Destructor called");
 	
-	if (m_settings) {
-		delete m_settings;
-		m_settings = nullptr;
-	}
+	m_isShuttingDown = true;
+	
+	// Don't delete Qt objects during shutdown - Qt's event system is shutting down
+	// and any Qt calls can crash. Just set to nullptr and let the OS clean up.
+	m_networkManager = nullptr;
+	m_settings = nullptr;
+	
+	obs_log(LOG_INFO, "[HolyricsFinder] Destructor complete");
 }
 
 QList<HolyricsFinder::HolyricsSource> HolyricsFinder::getSourceDefinitions()
@@ -57,6 +68,24 @@ QStringList HolyricsFinder::getIpHistory() const
 	return m_settings->value("ipHistory", QStringList()).toStringList();
 }
 
+QList<HolyricsFinder::ConnectionInfo> HolyricsFinder::getConnectionHistory() const
+{
+	QList<ConnectionInfo> history;
+	QStringList connections = m_settings->value("connectionHistory", QStringList()).toStringList();
+	
+	for (const QString &connStr : connections) {
+		QStringList parts = connStr.split(':');
+		if (parts.size() == 2) {
+			ConnectionInfo info;
+			info.ip = parts[0];
+			info.port = parts[1].toInt();
+			history.append(info);
+		}
+	}
+	
+	return history;
+}
+
 void HolyricsFinder::addIpToHistory(const QString &ip)
 {
 	QStringList history = getIpHistory();
@@ -72,6 +101,29 @@ void HolyricsFinder::addIpToHistory(const QString &ip)
 	m_settings->sync();
 }
 
+void HolyricsFinder::addConnectionToHistory(const QString &ip, int port)
+{
+	QString connStr = QString("%1:%2").arg(ip).arg(port);
+	QStringList history = m_settings->value("connectionHistory", QStringList()).toStringList();
+	
+	history.removeAll(connStr);
+	history.prepend(connStr);
+	
+	while (history.size() > 10) {
+		history.removeLast();
+	}
+	
+	m_settings->setValue("connectionHistory", history);
+	m_settings->sync();
+	
+	obs_log(LOG_INFO, "[HolyricsFinder] Added connection to history: %s:%d",
+		ip.toUtf8().constData(), port);
+	
+	addIpToHistory(ip);
+	
+	logConnectionHistory();
+}
+
 void HolyricsFinder::scanNetwork(const QString &baseIp, int port)
 {
 	QStringList parts = baseIp.split('.');
@@ -81,43 +133,81 @@ void HolyricsFinder::scanNetwork(const QString &baseIp, int port)
 		return;
 	}
 
-	m_scanningCount = 0;
-	m_scanningTotal = 254;
+	abortPendingRequests();
+	
 	m_currentPort = port;
+	m_scanFoundConnection = false;
+
+	QList<ConnectionInfo> history = getConnectionHistory();
+	QSet<QString> historyIps;
+	int historyTestCount = 0;
+	
+	for (const ConnectionInfo &conn : history) {
+		if (conn.port == port) {
+			historyIps.insert(conn.ip);
+			historyTestCount++;
+		}
+	}
 
 	QString base = QString("%1.%2.%3.").arg(parts[0], parts[1], parts[2]);
-
+	QStringList ipsToScan;
+	
+	for (const ConnectionInfo &conn : history) {
+		if (conn.port == port) {
+			ipsToScan.prepend(conn.ip);
+		}
+	}
+	
 	for (int i = 1; i <= 254; ++i) {
 		QString ip = base + QString::number(i);
+		if (!historyIps.contains(ip)) {
+			ipsToScan.append(ip);
+		}
+	}
+	
+	m_scanningCount = 0;
+	m_scanningTotal = ipsToScan.size();
+	
+	if (historyTestCount > 0) {
+		obs_log(LOG_INFO, "Testing %d connection(s) from history first, then %d other IPs",
+			historyTestCount, m_scanningTotal - historyTestCount);
+	}
+	
+	for (const QString &ip : ipsToScan) {
 		testConnection(ip, port);
 	}
 }
 
 void HolyricsFinder::testConnection(const QString &ip, int port)
 {
+	if (m_scanFoundConnection && m_scanningTotal > 0) {
+		return;
+	}
+	
 	QUrl qurl(QString("http://%1:%2/").arg(ip).arg(port));
 	QNetworkRequest request;
 	request.setUrl(qurl);
 	request.setAttribute(QNetworkRequest::Attribute::User, QVariant(ip));
+	request.setTransferTimeout(2000);
 
-	m_networkManager->get(request);
+	QNetworkReply *reply = m_networkManager->get(request);
+	if (m_scanningTotal > 0) {
+		m_pendingReplies.append(reply);
+	}
 }
 
 void HolyricsFinder::onNetworkReply(QNetworkReply *reply)
 {
+	m_pendingReplies.removeOne(reply);
 	reply->deleteLater();
 
 	QString ip = reply->request().attribute(QNetworkRequest::User).toString();
 
-	if (m_scanningTotal > 0) {
+	bool wasScanning = (m_scanningTotal > 0);
+	
+	if (wasScanning) {
 		m_scanningCount++;
 		emit scanProgress(m_scanningCount, m_scanningTotal);
-
-		if (m_scanningCount >= m_scanningTotal) {
-			m_scanningCount = 0;
-			m_scanningTotal = 0;
-			emit scanComplete();
-		}
 	}
 
 	if (reply->error() == QNetworkReply::NoError) {
@@ -126,12 +216,32 @@ void HolyricsFinder::onNetworkReply(QNetworkReply *reply)
 		if (isHolyricsResponse(response) || response.contains("holyrics", Qt::CaseInsensitive)) {
 			obs_log(LOG_INFO, "Holyrics found at: %s",
 				ip.toUtf8().constData());
+			
+			int port = reply->request().url().port();
+			addConnectionToHistory(ip, port);
+			
+			if (wasScanning) {
+				m_scanFoundConnection = true;
+				m_scanningCount = 0;
+				m_scanningTotal = 0;
+				abortPendingRequests();
+				emit scanComplete();
+			}
+			
 			emit connectionSuccess(ip);
-		} else if (!ip.isEmpty() && m_scanningTotal == 0) {
+			return;
+		} else if (!wasScanning) {
 			emit connectionFailed(ip);
 		}
-	} else if (!ip.isEmpty() && m_scanningTotal == 0) {
+	} else if (!wasScanning) {
 		emit connectionFailed(ip);
+	}
+	
+	if (wasScanning && m_scanningTotal > 0 && m_scanningCount >= m_scanningTotal) {
+		m_scanningCount = 0;
+		m_scanningTotal = 0;
+		abortPendingRequests();
+		emit scanComplete();
 	}
 }
 
@@ -143,7 +253,7 @@ bool HolyricsFinder::isHolyricsResponse(const QString &response)
 
 void HolyricsFinder::createHolyricsSources(const QString &ip, int port)
 {
-	addIpToHistory(ip);
+	addConnectionToHistory(ip, port);
 
 	auto sources = getSourceDefinitions();
 	for (const auto &source : sources) {
@@ -193,4 +303,68 @@ void HolyricsFinder::createBrowserSource(const QString &name, const QString &url
 
 	obs_data_release(settings);
 	obs_source_release(currentSceneSource);
+}
+
+void HolyricsFinder::updateBrowserSourceUrl(const QString &name, const QString &url)
+{
+	obs_source_t *source = obs_get_source_by_name(name.toUtf8().constData());
+	if (!source) {
+		obs_log(LOG_WARNING, "Source not found: %s", name.toUtf8().constData());
+		return;
+	}
+
+	obs_data_t *settings = obs_source_get_settings(source);
+	obs_data_set_string(settings, "url", url.toUtf8().constData());
+	obs_source_update(source, settings);
+	
+	obs_log(LOG_INFO, "Updated source: %s with URL: %s",
+		name.toUtf8().constData(),
+		url.toUtf8().constData());
+
+	obs_data_release(settings);
+	obs_source_release(source);
+}
+
+void HolyricsFinder::prepareForShutdown()
+{
+	obs_log(LOG_INFO, "[HolyricsFinder] Preparing for shutdown");
+	m_isShuttingDown = true;
+}
+
+void HolyricsFinder::stopScanning()
+{
+	if (m_scanningTotal > 0) {
+		obs_log(LOG_INFO, "Stopping network scan");
+		m_scanningCount = 0;
+		m_scanningTotal = 0;
+		m_scanFoundConnection = false;
+		abortPendingRequests();
+		emit scanComplete();
+	}
+}
+
+void HolyricsFinder::abortPendingRequests()
+{
+	for (QNetworkReply *reply : m_pendingReplies) {
+		if (reply && reply->isRunning()) {
+			reply->abort();
+		}
+	}
+	m_pendingReplies.clear();
+}
+
+void HolyricsFinder::logConnectionHistory() const
+{
+	QList<ConnectionInfo> history = getConnectionHistory();
+	
+	if (history.isEmpty()) {
+		obs_log(LOG_INFO, "[HolyricsFinder] Connection history is empty");
+		return;
+	}
+	
+	obs_log(LOG_INFO, "[HolyricsFinder] Connection history (%d entries):", history.size());
+	for (int i = 0; i < history.size(); ++i) {
+		obs_log(LOG_INFO, "  [%d] %s:%d", i + 1,
+			history[i].ip.toUtf8().constData(), history[i].port);
+	}
 }
