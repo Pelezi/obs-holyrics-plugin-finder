@@ -17,6 +17,7 @@ the Free Software Foundation; either version 2 of the License, or
 #include <QLabel>
 #include <QProgressBar>
 #include <QListWidget>
+#include <QTabWidget>
 
 class HolyricsFinder;
 
@@ -36,6 +37,7 @@ private slots:
 	void onScanProgress(int current, int total);
 	void onScanComplete();
 	void refreshSourcesList();
+	void refreshDocksList();
 
 private:
 	HolyricsFinder *m_finder;
@@ -51,7 +53,9 @@ private:
 	QPushButton *m_copyIpButton;
 	QLabel *m_statusLabel;
 	QProgressBar *m_progressBar;
+	QTabWidget *m_tabWidget;
 	QListWidget *m_sourcesList;
+	QListWidget *m_docksList;
 
 	void setupUI();
 	void detectLocalIP();
@@ -59,4 +63,5 @@ private:
 	int getPortFromInput() const;
 	void setIpToInputs(const QString &ip);
 	void updateStatus(const QString &message, bool isError = false);
+	QString getObsConfigPath() const;
 };

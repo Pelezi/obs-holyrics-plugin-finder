@@ -23,6 +23,11 @@ the Free Software Foundation; either version 2 of the License, or
 #include <QRegularExpression>
 #include <QClipboard>
 #include <QApplication>
+#include <QStandardPaths>
+#include <QFile>
+#include <QTextStream>
+#include <QSettings>
+#include <QDir>
 
 HolyricsDialog::HolyricsDialog(QWidget *parent, HolyricsFinder *finder)
 	: QDialog(parent),
@@ -36,6 +41,7 @@ HolyricsDialog::HolyricsDialog(QWidget *parent, HolyricsFinder *finder)
 	setupUI();
 	detectLocalIP();
 	refreshSourcesList();
+	refreshDocksList();
 
 	connect(m_finder, &HolyricsFinder::connectionSuccess, this,
 		&HolyricsDialog::onConnectionSuccess);
@@ -165,9 +171,12 @@ void HolyricsDialog::setupUI()
 
 	mainLayout->addWidget(connectionGroup);
 
-	// Browser Sources Section
-	QGroupBox *sourcesGroup = new QGroupBox(Translations::get("sources.group"), this);
-	QVBoxLayout *sourcesLayout = new QVBoxLayout(sourcesGroup);
+	// Create tab widget for Sources and Docks
+	m_tabWidget = new QTabWidget(this);
+	
+	// Browser Sources Tab
+	QWidget *sourcesTab = new QWidget(this);
+	QVBoxLayout *sourcesLayout = new QVBoxLayout(sourcesTab);
 
 	QLabel *sourcesLabel = new QLabel(Translations::get("sources.label"), this);
 	sourcesLayout->addWidget(sourcesLabel);
@@ -213,7 +222,27 @@ void HolyricsDialog::setupUI()
 		&HolyricsDialog::onUpdateSources);
 	sourcesLayout->addWidget(m_updateButton);
 
-	mainLayout->addWidget(sourcesGroup);
+	// Docks Tab
+	QWidget *docksTab = new QWidget(this);
+	QVBoxLayout *docksLayout = new QVBoxLayout(docksTab);
+
+	QLabel *docksLabel = new QLabel(Translations::get("docks.label"), this);
+	docksLabel->setWordWrap(true);
+	docksLayout->addWidget(docksLabel);
+
+	m_docksList = new QListWidget(this);
+	docksLayout->addWidget(m_docksList);
+
+	QPushButton *refreshDocksButton = new QPushButton(Translations::get("docks.refresh"), this);
+	connect(refreshDocksButton, &QPushButton::clicked, this,
+		&HolyricsDialog::refreshDocksList);
+	docksLayout->addWidget(refreshDocksButton);
+
+	// Add tabs to tab widget
+	m_tabWidget->addTab(sourcesTab, Translations::get("sources.tab_title"));
+	m_tabWidget->addTab(docksTab, Translations::get("docks.tab_title"));
+	
+	mainLayout->addWidget(m_tabWidget);
 
 	QHBoxLayout *closeLayout = new QHBoxLayout();
 	closeLayout->addStretch();
@@ -247,29 +276,15 @@ void HolyricsDialog::detectLocalIP()
 		obs_log(LOG_INFO, "[HolyricsDialog] Found connection history. Last: %s:%d",
 			lastConnection.ip.toUtf8().constData(), lastConnection.port);
 		
-		QStringList historyParts = lastConnection.ip.split('.');
-		QStringList currentParts = currentDeviceIp.split('.');
+		setIpToInputs(lastConnection.ip);
+		m_portInput->setValue(lastConnection.port);
 		
-		bool sameNetwork = false;
-		if (historyParts.size() == 4 && currentParts.size() == 4) {
-			sameNetwork = (historyParts[0] == currentParts[0] &&
-				       historyParts[1] == currentParts[1] &&
-				       historyParts[2] == currentParts[2]);
-		}
-		
-		if (sameNetwork || currentDeviceIp.isEmpty()) {
-			setIpToInputs(lastConnection.ip);
-			m_portInput->setValue(lastConnection.port);
-			
-			obs_log(LOG_INFO, "[HolyricsDialog] Loaded IP from history: %s:%d",
-				lastConnection.ip.toUtf8().constData(), lastConnection.port);
-			return;
-		} else {
-			obs_log(LOG_INFO, "[HolyricsDialog] Network changed. Using current device IP instead of history");
-		}
-	} else {
-		obs_log(LOG_INFO, "[HolyricsDialog] No connection history found");
+		obs_log(LOG_INFO, "[HolyricsDialog] Loaded IP from history: %s:%d",
+			lastConnection.ip.toUtf8().constData(), lastConnection.port);
+		return;
 	}
+	
+	obs_log(LOG_INFO, "[HolyricsDialog] No connection history found");
 	
 	if (!currentDeviceIp.isEmpty()) {
 		QStringList parts = currentDeviceIp.split('.');
@@ -385,6 +400,7 @@ void HolyricsDialog::onConnectionSuccess(const QString &ip)
 	setIpToInputs(ip);
 	
 	refreshSourcesList();
+	refreshDocksList();
 	
 	int port = getPortFromInput();
 	int selectedCount = 0;
@@ -495,4 +511,127 @@ void HolyricsDialog::refreshSourcesList()
 	}, this);
 
 	m_updateButton->setEnabled(m_sourcesList->count() > 0);
+}
+
+QString HolyricsDialog::getObsConfigPath() const
+{
+	// On Windows, OBS stores config in %APPDATA%/obs-studio
+	QString appDataPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+	
+	// QStandardPaths::AppDataLocation returns something like:
+	// C:/Users/Username/AppData/Roaming/obs-holyrics-plugin-finder
+	// We need to get to C:/Users/Username/AppData/Roaming/obs-studio
+	
+	QDir appDataDir(appDataPath);
+	appDataDir.cdUp(); // Go to Roaming directory
+	QString obsConfigPath = appDataDir.absolutePath() + "/obs-studio";
+	
+	obs_log(LOG_INFO, "Detected OBS config path: %s", obsConfigPath.toUtf8().constData());
+	
+	return obsConfigPath;
+}
+
+void HolyricsDialog::refreshDocksList()
+{
+	m_docksList->clear();
+
+	QString configPath = getObsConfigPath();
+	QString userIniPath = configPath + "/user.ini";
+	
+	obs_log(LOG_INFO, "Looking for OBS user.ini at: %s", userIniPath.toUtf8().constData());
+	
+	QFile file(userIniPath);
+	if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+		obs_log(LOG_WARNING, "OBS user.ini not found or cannot be opened");
+		QListWidgetItem *item = new QListWidgetItem(Translations::get("docks.not_found"), m_docksList);
+		item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
+		return;
+	}
+	
+	QString docksJson;
+	QTextStream in(&file);
+	while (!in.atEnd()) {
+		QString line = in.readLine().trimmed();
+		if (line.startsWith("ExtraBrowserDocks=")) {
+			docksJson = line.mid(18);
+			break;
+		}
+	}
+	file.close();
+	
+	obs_log(LOG_INFO, "ExtraBrowserDocks JSON: %s", docksJson.toUtf8().constData());
+	
+	if (docksJson.isEmpty() || docksJson == "[]") {
+		QListWidgetItem *item = new QListWidgetItem(Translations::get("docks.none_found"), m_docksList);
+		item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
+		return;
+	}
+	
+	QString ip = getIpFromInputs();
+	int port = getPortFromInput();
+	QRegularExpression ipPortRegex("https?://([0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}):([0-9]{1,5})(.*)");
+	QRegularExpression dockRegex("\\{\"title\":\\s*\"([^\"]+)\"\\s*,\\s*\"url\":\\s*\"([^\"]+)\"");
+	QRegularExpressionMatchIterator matches = dockRegex.globalMatch(docksJson);
+	
+	int totalDocks = 0;
+	int matchedDocks = 0;
+	
+	while (matches.hasNext()) {
+		QRegularExpressionMatch match = matches.next();
+		QString dockTitle = match.captured(1);
+		QString dockUrl = match.captured(2);
+		
+		if (dockUrl.isEmpty()) continue;
+		
+		totalDocks++;
+		obs_log(LOG_INFO, "Dock '%s' URL: %s", dockTitle.toUtf8().constData(), dockUrl.toUtf8().constData());
+		
+		QRegularExpressionMatch urlMatch = ipPortRegex.match(dockUrl);
+		if (urlMatch.hasMatch()) {
+			matchedDocks++;
+			QString dockIp = urlMatch.captured(1);
+			int dockPort = urlMatch.captured(2).toInt();
+			QString urlPath = urlMatch.captured(3);
+			
+			bool needsUpdate = (dockIp != ip || dockPort != port);
+			QString displayText = QString("%1 - %2:%3 %4")
+				.arg(dockTitle).arg(dockIp).arg(dockPort)
+				.arg(needsUpdate ? "⚠" : "✓");
+			
+			QListWidgetItem *item = new QListWidgetItem(m_docksList);
+			
+			if (needsUpdate) {
+				QString newUrl = QString("http://%1:%2%3").arg(ip).arg(port).arg(urlPath);
+				
+				QWidget *itemWidget = new QWidget();
+				QHBoxLayout *itemLayout = new QHBoxLayout(itemWidget);
+				itemLayout->setContentsMargins(5, 2, 5, 2);
+				
+				QLabel *label = new QLabel(displayText);
+				itemLayout->addWidget(label, 1);
+				
+				QPushButton *copyButton = new QPushButton(Translations::get("docks.copy_url"));
+				copyButton->setMaximumWidth(100);
+				connect(copyButton, &QPushButton::clicked, this, [newUrl, dockTitle, this]() {
+					QClipboard *clipboard = QApplication::clipboard();
+					clipboard->setText(newUrl);
+					updateStatus(Translations::get("docks.url_copied").arg(dockTitle));
+				});
+				itemLayout->addWidget(copyButton);
+				
+				item->setSizeHint(itemWidget->sizeHint());
+				m_docksList->setItemWidget(item, itemWidget);
+				item->setData(Qt::UserRole, newUrl);
+			} else {
+				item->setText(displayText);
+			}
+		}
+	}
+	
+	if (m_docksList->count() == 0) {
+		QListWidgetItem *item = new QListWidgetItem(Translations::get("docks.none_found"), m_docksList);
+		item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
+	}
+	
+	obs_log(LOG_INFO, "Found %d docks (%d matched IP:port)", m_docksList->count(), matchedDocks);
 }

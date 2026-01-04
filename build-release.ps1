@@ -2,7 +2,7 @@
 # This script creates a release build and packages it for distribution
 
 param(
-    [string]$Version = "1.0.0"
+    [string]$Version = "1.1.0"
 )
 
 $ErrorActionPreference = "Stop"
@@ -76,8 +76,8 @@ if ($PdbFile) {
 }
 
 # Copy README and LICENSE
-if (Test-Path "README.md") {
-    Copy-Item -Path "README.md" -Destination $PackageDir
+if (Test-Path "README.pt-BR.md") {
+    Copy-Item -Path "README.pt-BR.md" -Destination $PackageDir
     Write-Host "  ? Copied README.md" -ForegroundColor Green
 }
 
@@ -88,47 +88,31 @@ if (Test-Path "LICENSE") {
 
 # Create installation instructions
 $InstallInstructions = @"
-# OBS Holyrics Finder - Installation Instructions
+# OBS Holyrics Finder - Instruções de Instalação
 
-## Automatic Installation (Recommended)
+1. Extraia esse arquivo ZIP para uma pasta temporária
+2. Copie a pasta 'obs-plugins' para o diretório de instalação do OBS
+   - Local padrão: C:\Program Files\obs-studio\
+3. Reinicie o OBS Studio
+4. O plugin vai aparecer em Ferramentas > Localizador Holyrics
 
-1. Extract this ZIP file
-2. Copy the 'obs-plugins' folder to your OBS installation directory
-   - Default location: C:\Program Files\obs-studio\
-3. Restart OBS Studio
-4. The plugin will appear in Tools > Holyrics Finder (or "Localizador Holyrics" in Portuguese)
+## Uso
 
-## Manual Installation
+1. Abra OBS Studio
+2. Vá para Ferramentas > Localizador Holyrics
+3. Clique em "Testar Conexão" ou "Escanear Rede" para encontrar sua instância do Holyrics
+4. Selecione as fontes do navegador para atualizar e clique em "Atualizar Fontes Selecionadas"
 
-1. Navigate to: obs-plugins\64bit\
-2. Copy the .dll file to: C:\Program Files\obs-studio\obs-plugins\64bit\
-3. (Optional) Copy the .pdb file for debugging support
-4. Restart OBS Studio
-
-## Usage
-
-1. Open OBS Studio
-2. Go to Tools > Holyrics Finder
-3. Click "Test Connection" or "Scan Network" to find your Holyrics instance
-4. Select browser sources to update and click "Update Selected Sources"
-
-## Supported Languages
+## Idiomas Suportados
 
 - English
 - Português (Brasil)
 
-The plugin automatically detects OBS's language setting.
+O plugin detecta automaticamente o idioma do OBS Studio.
 
-## Troubleshooting
+## Suporte
 
-If the plugin doesn't appear:
-- Make sure you copied files to the correct directory
-- Check OBS logs (Help > Log Files) for errors
-- Verify OBS version compatibility (requires OBS 28.0 or later)
-
-## Support
-
-Report issues at: https://github.com/Pelezi/obs-holyrics-plugin-finder/issues
+Reporte erros em: https://github.com/Pelezi/obs-holyrics-plugin-finder/issues
 "@
 
 Set-Content -Path (Join-Path $PackageDir "INSTALL.txt") -Value $InstallInstructions -Encoding UTF8
